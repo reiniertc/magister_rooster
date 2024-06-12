@@ -14,7 +14,7 @@ _LOGGER = logging.getLogger(__name__)
 
 CONF_URL = "url"
 
-DEFAULT_NAME = "Inpakken voor morgen"
+DEFAULT_NAME = "Magister Rooster"
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Required(CONF_URL): cv.url,
@@ -25,14 +25,24 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
     url = config.get(CONF_URL)
     name = config.get(CONF_NAME)
 
-    add_entities([MagisterRoosterSensor(name, url)], True)
+    add_entities([
+        VolgendeSchooldagSensor(name, url),
+        InpakkenVoorMorgenSensor(name, url),
+        BegintijdMorgenSensor(name, url),
+        EindtijdMorgenSensor(name, url),
+        BegintijdVandaagSensor(name, url),
+        EindtijdVandaagSensor(name, url)
+    ], True)
 
-class MagisterRoosterSensor(Entity):
+class MagisterRoosterBaseSensor(Entity):
     def __init__(self, name, url):
         self._name = name
         self._url = url
         self._state = None
         self._events = []
+        self._next_school_day = None
+        self._events_today = []
+        self._events_tomorrow = []
 
     @property
     def name(self):
@@ -48,22 +58,112 @@ class MagisterRoosterSensor(Entity):
             response.raise_for_status()
             cal = Calendar.from_ical(response.text)
             now_utc = now()
-            tomorrow = (now_utc + timedelta(days=1)).date()
-            
-            events = []
+            today = now_utc.date()
+            tomorrow = today + timedelta(days=1)
+            self._next_school_day = self.get_next_school_day(today)
+
+            self._events_today = []
+            self._events_tomorrow = []
             for component in cal.walk():
                 if component.name == "VEVENT":
                     event_start = component.get('dtstart').dt
+                    event_end = component.get('dtend').dt
+                    summary = component.get('summary')
                     if isinstance(event_start, datetime):
                         event_start = event_start.date()
-                    
-                    if event_start == tomorrow:
-                        summary = component.get('summary')
-                        events.append(summary)
-            
-            self._events = events
-            self._state = ", ".join(events)
+                    if isinstance(event_end, datetime):
+                        event_end = event_end.date()
+
+                    if event_start == today:
+                        self._events_today.append((event_start, event_end, summary))
+                    if event_start == self._next_school_day:
+                        self._events_tomorrow.append((event_start, event_end, summary))
+
+            self._events = self._events_today + self._events_tomorrow
 
         except requests.exceptions.RequestException as e:
             _LOGGER.error(f"Error fetching iCal feed: {e}")
+            self._state = None
+
+    def get_next_school_day(self, today):
+        # Assuming a 5-day school week, no holidays
+        if today.weekday() == 4:  # Friday
+            return today + timedelta(days=3)
+        elif today.weekday() == 5:  # Saturday
+            return today + timedelta(days=2)
+        else:
+            return today + timedelta(days=1)
+
+class VolgendeSchooldagSensor(MagisterRoosterBaseSensor):
+    @property
+    def name(self):
+        return f"{self._name} Volgende Schooldag"
+
+    def update(self):
+        super().update()
+        if self._next_school_day:
+            self._state = self._next_school_day.strftime("%A %d %B")
+
+class InpakkenVoorMorgenSensor(MagisterRoosterBaseSensor):
+    @property
+    def name(self):
+        return f"{self._name} Inpakken voor morgen"
+
+    def update(self):
+        super().update()
+        if self._events_tomorrow:
+            self._state = ", ".join([event[2].split(' ', 1)[1] for event in self._events_tomorrow if ' ' in event[2]])
+        else:
+            self._state = None
+
+class BegintijdMorgenSensor(MagisterRoosterBaseSensor):
+    @property
+    def name(self):
+        return f"{self._name} Begintijd morgen"
+
+    def update(self):
+        super().update()
+        if self._events_tomorrow:
+            first_event = min(self._events_tomorrow, key=lambda event: event[0])
+            self._state = first_event[0].strftime("%H:%M")
+        else:
+            self._state = None
+
+class EindtijdMorgenSensor(MagisterRoosterBaseSensor):
+    @property
+    def name(self):
+        return f"{self._name} Eindtijd morgen"
+
+    def update(self):
+        super().update()
+        if self._events_tomorrow:
+            last_event = max(self._events_tomorrow, key=lambda event: event[1])
+            self._state = last_event[1].strftime("%H:%M")
+        else:
+            self._state = None
+
+class BegintijdVandaagSensor(MagisterRoosterBaseSensor):
+    @property
+    def name(self):
+        return f"{self._name} Begintijd vandaag"
+
+    def update(self):
+        super().update()
+        if self._events_today:
+            first_event = min(self._events_today, key=lambda event: event[0])
+            self._state = first_event[0].strftime("%H:%M")
+        else:
+            self._state = None
+
+class EindtijdVandaagSensor(MagisterRoosterBaseSensor):
+    @property
+    def name(self):
+        return f"{self._name} Eindtijd vandaag"
+
+    def update(self):
+        super().update()
+        if self._events_today:
+            last_event = max(self._events_today, key=lambda event: event[1])
+            self._state = last_event[1].strftime("%H:%M")
+        else:
             self._state = None
