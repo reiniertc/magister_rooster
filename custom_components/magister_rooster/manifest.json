@@ -1,0 +1,8 @@
+{
+  "domain": "magister_rooster",
+  "name": "Magister Rooster",
+  "documentation": "https://example.com",
+  "requirements": ["icalendar"],
+  "codeowners": [],
+  "version": "1.0.0"
+}
