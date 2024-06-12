@@ -111,7 +111,7 @@ class MagisterRoosterBaseSensor(Entity):
         if self._regex_pattern:
             match = self._regex_pattern.search(summary)
             if match:
-                return match.group(0)
+                return match.group(0)  # Adjust this if you need a specific group from the regex match
         return summary
 
 class VolgendeSchooldagSensor(MagisterRoosterBaseSensor):
