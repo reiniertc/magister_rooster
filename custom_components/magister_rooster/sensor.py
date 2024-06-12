@@ -111,7 +111,7 @@ class MagisterRoosterBaseSensor(Entity):
         if self._regex_pattern:
             match = self._regex_pattern.search(summary)
             if match:
-                return match.group(1)
+                return match.group(0)
         return summary
 
 class VolgendeSchooldagSensor(MagisterRoosterBaseSensor):
@@ -135,12 +135,13 @@ class InpakkenVoorMorgenSensor(MagisterRoosterBaseSensor):
     def update(self):
         super().update()
         if self._events_tomorrow:
-            summaries = [self.filter_summary(event[2]) for event in self._events_tomorrow]
-            unique_summaries = set(summaries)
-            self._state = ", ".join(unique_summaries)
+            filtered_summaries = set()
+            for event in self._events_tomorrow:
+                summary = self.filter_summary(event[2])
+                filtered_summaries.add(summary)
+            self._state = ", ".join(filtered_summaries)
         else:
             self._state = None
-
 
 class BegintijdMorgenSensor(MagisterRoosterBaseSensor):
     @property
