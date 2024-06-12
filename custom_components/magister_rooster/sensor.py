@@ -111,8 +111,8 @@ class MagisterRoosterBaseSensor(Entity):
         if self._regex_pattern:
             match = self._regex_pattern.search(summary)
             if match:
-                return match.group(0)  # Adjust this if you need a specific group from the regex match
-        return summary
+                return match.group(0)  # Return the matched part
+        return summary  # Return the original summary if no match
 
 class VolgendeSchooldagSensor(MagisterRoosterBaseSensor):
     def __init__(self, hass, name, url, regex_pattern=None):
