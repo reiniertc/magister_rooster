@@ -8,7 +8,7 @@ from homeassistant.components.sensor import PLATFORM_SCHEMA
 from homeassistant.const import CONF_NAME
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity import Entity
-from homeassistant.util.dt import now, get_time_zone
+from homeassistant.util.dt import now, get_time_zone, as_local
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,15 +27,15 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
 
     add_entities([
         VolgendeSchooldagSensor(hass, name, url),
-        InpakkenVoorMorgenSensor(name, url),
-        BegintijdMorgenSensor(name, url),
-        EindtijdMorgenSensor(name, url),
-        BegintijdVandaagSensor(name, url),
-        EindtijdVandaagSensor(name, url)
+        InpakkenVoorMorgenSensor(hass, name, url),
+        BegintijdMorgenSensor(hass, name, url),
+        EindtijdMorgenSensor(hass, name, url),
+        BegintijdVandaagSensor(hass, name, url),
+        EindtijdVandaagSensor(hass, name, url)
     ], True)
 
 class MagisterRoosterBaseSensor(Entity):
-    def __init__(self, name, url):
+    def __init__(self, hass, name, url):
         self._name = name
         self._url = url
         self._state = None
@@ -43,6 +43,7 @@ class MagisterRoosterBaseSensor(Entity):
         self._next_school_day = None
         self._events_today = []
         self._events_tomorrow = []
+        self.hass = hass
 
     @property
     def name(self):
@@ -69,23 +70,18 @@ class MagisterRoosterBaseSensor(Entity):
                     event_start = component.get('dtstart').dt
                     event_end = component.get('dtend').dt
                     summary = component.get('summary')
-                    
-                    if isinstance(event_start, datetime):
-                        if event_start.tzinfo is None:
-                            event_start = event_start.replace(tzinfo=get_time_zone(self.hass))
-                        event_start_date = event_start.date()
-                    else:
-                        event_start_date = event_start
-
-                    if isinstance(event_end, datetime):
-                        if event_end.tzinfo is None:
-                            event_end = event_end.replace(tzinfo=get_time_zone(self.hass))
-                        event_end_date = event_end.date()
-                    else:
-                        event_end_date = event_end
 
                     # Alleen gebeurtenissen die geen hele dag zijn
                     if 'allday' not in component:
+                        # Converteer naar lokale tijdzone
+                        if isinstance(event_start, datetime):
+                            event_start = as_local(event_start)
+                        if isinstance(event_end, datetime):
+                            event_end = as_local(event_end)
+
+                        event_start_date = event_start.date() if isinstance(event_start, datetime) else event_start
+                        event_end_date = event_end.date() if isinstance(event_end, datetime) else event_end
+
                         if event_start_date == today:
                             self._events_today.append((event_start, event_end, summary))
                         if event_start_date == self._next_school_day:
@@ -108,8 +104,7 @@ class MagisterRoosterBaseSensor(Entity):
 
 class VolgendeSchooldagSensor(MagisterRoosterBaseSensor):
     def __init__(self, hass, name, url):
-        super().__init__(name, url)
-        self.hass = hass
+        super().__init__(hass, name, url)
 
     @property
     def name(self):
