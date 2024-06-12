@@ -135,14 +135,12 @@ class InpakkenVoorMorgenSensor(MagisterRoosterBaseSensor):
     def update(self):
         super().update()
         if self._events_tomorrow:
-            filtered_summaries = []
-            for event in self._events_tomorrow:
-                summary = self.filter_summary(event[2])
-                if summary not in filtered_summaries:
-                    filtered_summaries.append(summary)
-            self._state = ", ".join(filtered_summaries)
+            summaries = [self.filter_summary(event[2]) for event in self._events_tomorrow]
+            unique_summaries = set(summaries)
+            self._state = ", ".join(unique_summaries)
         else:
             self._state = None
+
 
 class BegintijdMorgenSensor(MagisterRoosterBaseSensor):
     @property
