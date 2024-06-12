@@ -3,7 +3,6 @@ from datetime import timedelta, datetime
 import requests
 from icalendar import Calendar
 import voluptuous as vol
-import re
 
 from homeassistant.components.sensor import PLATFORM_SCHEMA
 from homeassistant.const import CONF_NAME
@@ -14,32 +13,29 @@ from homeassistant.util.dt import now, get_time_zone, as_local
 _LOGGER = logging.getLogger(__name__)
 
 CONF_URL = "url"
-CONF_REGEX_PATTERN = "regex_pattern"
 
 DEFAULT_NAME = "Magister Rooster"
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Required(CONF_URL): cv.url,
     vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
-    vol.Optional(CONF_REGEX_PATTERN): cv.string,
 })
 
 def setup_platform(hass, config, add_entities, discovery_info=None):
     url = config.get(CONF_URL)
     name = config.get(CONF_NAME)
-    regex_pattern = config.get(CONF_REGEX_PATTERN)
 
     add_entities([
-        VolgendeSchooldagSensor(hass, name, url, regex_pattern),
-        InpakkenVoorMorgenSensor(hass, name, url, regex_pattern),
-        BegintijdMorgenSensor(hass, name, url, regex_pattern),
-        EindtijdMorgenSensor(hass, name, url, regex_pattern),
-        BegintijdVandaagSensor(hass, name, url, regex_pattern),
-        EindtijdVandaagSensor(hass, name, url, regex_pattern)
+        VolgendeSchooldagSensor(hass, name, url),
+        InpakkenVoorMorgenSensor(hass, name, url),
+        BegintijdMorgenSensor(hass, name, url),
+        EindtijdMorgenSensor(hass, name, url),
+        BegintijdVandaagSensor(hass, name, url),
+        EindtijdVandaagSensor(hass, name, url)
     ], True)
 
 class MagisterRoosterBaseSensor(Entity):
-    def __init__(self, hass, name, url, regex_pattern=None):
+    def __init__(self, hass, name, url):
         self._name = name
         self._url = url
         self._state = None
@@ -48,7 +44,6 @@ class MagisterRoosterBaseSensor(Entity):
         self._events_today = []
         self._events_tomorrow = []
         self.hass = hass
-        self._regex_pattern = re.compile(regex_pattern) if regex_pattern else None
 
     @property
     def name(self):
@@ -65,7 +60,6 @@ class MagisterRoosterBaseSensor(Entity):
             cal = Calendar.from_ical(response.text)
             now_utc = now()
             today = now_utc.date()
-            tomorrow = today + timedelta(days=1)
             self._next_school_day = self.get_next_school_day(today)
 
             self._events_today = []
@@ -107,16 +101,9 @@ class MagisterRoosterBaseSensor(Entity):
         else:
             return today + timedelta(days=1)
 
-    def filter_summary(self, summary):
-        if self._regex_pattern:
-            match = self._regex_pattern.search(summary)
-            if match:
-                return match.group(0)  # Return the matched part
-        return summary  # Return the original summary if no match
-
 class VolgendeSchooldagSensor(MagisterRoosterBaseSensor):
-    def __init__(self, hass, name, url, regex_pattern=None):
-        super().__init__(hass, name, url, regex_pattern)
+    def __init__(self, hass, name, url):
+        super().__init__(hass, name, url)
 
     @property
     def name(self):
@@ -135,10 +122,7 @@ class InpakkenVoorMorgenSensor(MagisterRoosterBaseSensor):
     def update(self):
         super().update()
         if self._events_tomorrow:
-            filtered_summaries = set()
-            for event in self._events_tomorrow:
-                summary = self.filter_summary(event[2])
-                filtered_summaries.add(summary)
+            filtered_summaries = set(event[2] for event in self._events_tomorrow)
             self._state = ", ".join(filtered_summaries)
         else:
             self._state = None
@@ -176,21 +160,4 @@ class BegintijdVandaagSensor(MagisterRoosterBaseSensor):
 
     def update(self):
         super().update()
-        if self._events_today:
-            first_event = min(self._events_today, key=lambda event: event[0])
-            self._state = first_event[0].strftime("%H:%M")
-        else:
-            self._state = None
-
-class EindtijdVandaagSensor(MagisterRoosterBaseSensor):
-    @property
-    def name(self):
-        return f"{self._name} Eindtijd vandaag"
-
-    def update(self):
-        super().update()
-        if self._events_today:
-            last_event = max(self._events_today, key=lambda event: event[1])
-            self._state = last_event[1].strftime("%H:%M")
-        else:
-            self._state = None
+        if
