@@ -123,7 +123,8 @@ class InpakkenVoorMorgenSensor(MagisterRoosterBaseSensor):
         super().update()
         if self._events_tomorrow:
             filtered_summaries = set(event[2] for event in self._events_tomorrow)
-            self._state = ", ".join(filtered_summaries)
+            sorted_summaries = sorted(filtered_summaries, key=lambda s: s[0])  # Sorteren op eerste karakter
+            self._state = ", ".join(sorted_summaries)
         else:
             self._state = None
 
@@ -160,4 +161,21 @@ class BegintijdVandaagSensor(MagisterRoosterBaseSensor):
 
     def update(self):
         super().update()
-        if
+        if self._events_today:
+            first_event = min(self._events_today, key=lambda event: event[0])
+            self._state = first_event[0].strftime("%H:%M")
+        else:
+            self._state = None
+
+class EindtijdVandaagSensor(MagisterRoosterBaseSensor):
+    @property
+    def name(self):
+        return f"{self._name} Eindtijd vandaag"
+
+    def update(self):
+        super().update()
+        if self._events_today:
+            last_event = max(self._events_today, key=lambda event: event[1])
+            self._state = last_event[1].strftime("%H:%M")
+        else:
+            self._state = None
